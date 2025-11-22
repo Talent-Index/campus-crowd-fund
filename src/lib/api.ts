@@ -3,7 +3,8 @@ import { Campaign, Milestone, Donation, PriceData } from '@/types/campaign';
 // For demo purposes, we'll use mock data
 // In production, this would connect to the actual backend API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const USE_MOCK_DATA = true; // Toggle for demo mode
+// Default to mock mode unless VITE_USE_MOCK_DATA is explicitly set to 'false'
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA !== 'false';
 
 // Mock data generator
 const generateMockCampaigns = (): Campaign[] => {
@@ -273,6 +274,30 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ caller })
+    });
+    return response.json();
+  },
+
+  async signInOrganiser(params: { walletAddress: string; name?: string; email?: string }) {
+    if (USE_MOCK_DATA) {
+      return {
+        success: true,
+        data: {
+          organiser: {
+            id: 1,
+            walletAddress: params.walletAddress,
+            name: params.name ?? null,
+            email: params.email ?? null,
+            createdAt: new Date().toISOString()
+          }
+        }
+      };
+    }
+
+    const response = await fetch(`${API_BASE_URL}/organisers/signin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
     });
     return response.json();
   }

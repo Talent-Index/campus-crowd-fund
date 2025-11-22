@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organiser {
+  id            Int        @id @default(autoincrement())
+  walletAddress String     @unique
+  name          String?
+  email         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  campaigns     Campaign[]
+}
+
+model Campaign {
+  id                     Int         @id @default(autoincrement())
+  onChainId              Int         @unique
+  organiser              Organiser   @relation(fields: [organiserId], references: [id])
+  organiserId            Int
+  creatorWallet          String
+  title                  String
+  description            String
+  goalKES                Int
+  goalAVAXWei            BigInt
+  conversionRate         Int
+  conversionTimestamp    Int
+  deadline               Int
+  totalDonationsAVAXWei  BigInt      @default(0)
+  totalDonationsKES      Int         @default(0)
+  goalReached            Boolean     @default(false)
+  finalized              Boolean     @default(false)
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  milestones             Milestone[]
+  donations              Donation[]
+}
+
+model Milestone {
+  id            Int       @id @default(autoincrement())
+  campaign      Campaign  @relation(fields: [campaignId], references: [id])
+  campaignId    Int
+  index         Int
+  description   String
+  amountKES     Int
+  amountAVAXWei BigInt
+  released      Boolean   @default(false)
+  evidenceURI   String?
+  proposedAt    Int?
+  votesFor      Int       @default(0)
+  votesAgainst  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([campaignId, index])
+}
+
+model Donation {
+  id            Int       @id @default(autoincrement())
+  campaign      Campaign  @relation(fields: [campaignId], references: [id])
+  campaignId    Int
+  donor         String
+  amountAVAXWei BigInt
+  amountKES     Int
+  txHash        String
+  timestamp     Int
+  createdAt     DateTime  @default(now())
+}
