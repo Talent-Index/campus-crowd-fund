@@ -6,9 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { formatKES } from '@/lib/formatters';
+import { formatKES, formatAddress } from '@/lib/formatters';
 import { ArrowLeft, Plus, Trash2, Save, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { connectWallet } from '@/lib/wallet';
 
 interface MilestoneInput {
   description: string;
@@ -18,6 +19,8 @@ interface MilestoneInput {
 const CreateCampaign = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [organiser, setOrganiser] = useState<{ walletAddress: string } | null>(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -70,17 +73,34 @@ const CreateCampaign = () => {
       }
     }
 
-    const totalMilestones = calculateTotalMilestones();
-    const goal = parseFloat(formData.goalKES);
-    if (Math.abs(totalMilestones - goal) > 1) {
-      return `Milestone total (${formatKES(totalMilestones)}) must equal goal (${formatKES(goal)})`;
-    }
-
     return null;
+  };
+
+  const handleOrganiserSignIn = async () => {
+    try {
+      setSigningIn(true);
+      const { address } = await connectWallet();
+      const result = await api.signInOrganiser({ walletAddress: address });
+      const walletAddress = result.data?.organiser?.walletAddress || address;
+      setOrganiser({ walletAddress });
+      toast.success('Signed in as organiser', {
+        description: formatAddress(walletAddress)
+      });
+    } catch (error) {
+      console.error('Organiser sign-in failed:', error);
+      toast.error('Failed to sign in as organiser');
+    } finally {
+      setSigningIn(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!organiser) {
+      toast.error('Please sign in as an organiser before creating a campaign');
+      return;
+    }
 
     const error = validateForm();
     if (error) {
@@ -90,12 +110,10 @@ const CreateCampaign = () => {
 
     try {
       setLoading(true);
-
-      const demoCreator = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
       const deadlineTimestamp = Math.floor(new Date(formData.deadline).getTime() / 1000);
 
       const result = await api.createCampaign({
-        creator: demoCreator,
+        creator: organiser.walletAddress,
         title: formData.title,
         description: formData.description,
         goalKES: parseFloat(formData.goalKES),
@@ -121,7 +139,7 @@ const CreateCampaign = () => {
 
   const totalMilestones = calculateTotalMilestones();
   const goal = parseFloat(formData.goalKES) || 0;
-  const isBalanced = Math.abs(totalMilestones - goal) <= 1;
+  // Removed isBalanced check as we no longer enforce milestone total to equal goal
 
   return (
     <div className="min-h-screen bg-background">
@@ -141,6 +159,32 @@ const CreateCampaign = () => {
             Launch a transparent, blockchain-secured fundraising campaign
           </p>
         </div>
+
+        <Card className="p-6 mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">
+                Organiser Sign-In
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Connect your wallet to sign in as an organiser before creating a campaign.
+              </p>
+              {organiser && (
+                <p className="mt-2 text-sm text-foreground">
+                  Signed in as <span className="font-mono">{formatAddress(organiser.walletAddress)}</span>
+                </p>
+              )}
+            </div>
+            <Button
+              type="button"
+              onClick={handleOrganiserSignIn}
+              disabled={signingIn}
+              className="gap-2"
+            >
+              {signingIn ? 'Connecting...' : organiser ? 'Change Wallet' : 'Connect Wallet'}
+            </Button>
+          </div>
+        </Card>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
@@ -282,25 +326,79 @@ const CreateCampaign = () => {
             </div>
 
             {/* Milestone Summary */}
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-foreground">Total Milestones:</span>
-                <span className="text-sm font-bold text-foreground">
-                  {formatKES(totalMilestones)}
-                </span>
+            <div className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-full bg-blue-100 dark:bg-blue-900/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                  </div>
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Funding Summary</span>
+                </div>
+                <div className="px-2.5 py-1 bg-white/80 dark:bg-gray-800/80 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800/50">
+                  {milestones.length} {milestones.length === 1 ? 'Milestone' : 'Milestones'}
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">Campaign Goal:</span>
-                <span className="text-sm font-bold text-foreground">
-                  {formatKES(goal)}
-                </span>
+              
+              <div className="space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Milestone Total</span>
+                  <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                    {formatKES(totalMilestones)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Campaign Goal</span>
+                  <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                    {formatKES(goal)}
+                  </span>
+                </div>
               </div>
-              {!isBalanced && goal > 0 && (
-                <div className="flex items-start gap-2 mt-3 p-2 bg-warning/10 border border-warning rounded">
-                  <AlertCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-warning">
-                    Milestone total must equal the campaign goal
-                  </p>
+
+              {totalMilestones > 0 && (
+                <div className={`mt-4 p-3 rounded-lg ${
+                  totalMilestones > goal 
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50' 
+                    : 'bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-800/50'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <div className={`p-1 mt-0.5 rounded-full ${
+                      totalMilestones > goal 
+                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' 
+                        : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                    }`}>
+                      {totalMilestones > goal ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="8" x2="12" y2="12"></line>
+                          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                      )}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${
+                        totalMilestones > goal 
+                          ? 'text-amber-700 dark:text-amber-300' 
+                          : 'text-green-700 dark:text-green-300'
+                      }`}>
+                        {totalMilestones > goal 
+                          ? `Milestone total exceeds goal by ${formatKES(totalMilestones - goal)}`
+                          : `Milestone total: ${formatKES(goal - totalMilestones)} below goal`
+                        }
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {totalMilestones > goal 
+                          ? 'Consider adjusting milestone amounts to match your goal.' 
+                          : 'You can add more amount to reach the campaign goal.'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -323,7 +421,7 @@ const CreateCampaign = () => {
           <div className="flex gap-4">
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || !organiser || totalMilestones <= 0}
               className="flex-1 gap-2"
             >
               <Save className="h-4 w-4" />

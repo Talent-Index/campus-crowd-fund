@@ -180,6 +180,13 @@ contract CrowdfundingEscrow is ReentrancyGuard, Ownable {
         );
         require(_milestoneDescriptions.length > 0, "At least one milestone required");
         
+        // Calculate total milestone amounts
+        uint256 totalMilestoneAVAX = 0;
+        for (uint256 i = 0; i < _milestoneAmountsAVAX.length; i++) {
+            totalMilestoneAVAX += _milestoneAmountsAVAX[i];
+        }
+        require(totalMilestoneAVAX <= _goalAVAX, "Total milestone amounts cannot exceed campaign goal");
+        
         uint256 campaignId = campaignCounter++;
         Campaign storage campaign = campaigns[campaignId];
         
@@ -430,21 +437,18 @@ contract CrowdfundingEscrow is ReentrancyGuard, Ownable {
             uint256 donorCount
         )
     {
-        Campaign storage campaign = campaigns[_campaignId];
-        return (
-            campaign.creator,
-            campaign.title,
-            campaign.description,
-            campaign.goalKES,
-            campaign.goalAVAX,
-            campaign.deadline,
-            campaign.totalDonationsAVAX,
-            campaign.conversionRate,
-            campaign.goalReached,
-            campaign.finalized,
-            campaign.milestonesCount,
-            campaign.donorList.length
-        );
+        creator = campaigns[_campaignId].creator;
+        title = campaigns[_campaignId].title;
+        description = campaigns[_campaignId].description;
+        goalKES = campaigns[_campaignId].goalKES;
+        goalAVAX = campaigns[_campaignId].goalAVAX;
+        deadline = campaigns[_campaignId].deadline;
+        totalDonationsAVAX = campaigns[_campaignId].totalDonationsAVAX;
+        conversionRate = campaigns[_campaignId].conversionRate;
+        goalReached = campaigns[_campaignId].goalReached;
+        finalized = campaigns[_campaignId].finalized;
+        milestonesCount = campaigns[_campaignId].milestonesCount;
+        donorCount = campaigns[_campaignId].donorList.length;
     }
     
     function getMilestone(uint256 _campaignId, uint256 _milestoneIndex)
@@ -462,20 +466,16 @@ contract CrowdfundingEscrow is ReentrancyGuard, Ownable {
             uint256 proposedAt
         )
     {
-        Campaign storage campaign = campaigns[_campaignId];
-        require(_milestoneIndex < campaign.milestonesCount, "Invalid milestone index");
-        
-        Milestone storage milestone = campaign.milestones[_milestoneIndex];
-        return (
-            milestone.description,
-            milestone.amountKES,
-            milestone.amountAVAX,
-            milestone.released,
-            milestone.votesFor,
-            milestone.votesAgainst,
-            milestone.evidenceURI,
-            milestone.proposedAt
-        );
+        require(_milestoneIndex < campaigns[_campaignId].milestonesCount, "Invalid milestone index");
+
+        description = campaigns[_campaignId].milestones[_milestoneIndex].description;
+        amountKES = campaigns[_campaignId].milestones[_milestoneIndex].amountKES;
+        amountAVAX = campaigns[_campaignId].milestones[_milestoneIndex].amountAVAX;
+        released = campaigns[_campaignId].milestones[_milestoneIndex].released;
+        votesFor = campaigns[_campaignId].milestones[_milestoneIndex].votesFor;
+        votesAgainst = campaigns[_campaignId].milestones[_milestoneIndex].votesAgainst;
+        evidenceURI = campaigns[_campaignId].milestones[_milestoneIndex].evidenceURI;
+        proposedAt = campaigns[_campaignId].milestones[_milestoneIndex].proposedAt;
     }
     
     function getDonation(uint256 _campaignId, address _donor)
