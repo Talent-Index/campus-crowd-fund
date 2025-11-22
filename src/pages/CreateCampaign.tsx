@@ -6,9 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { formatKES } from '@/lib/formatters';
+import { formatKES, formatAddress } from '@/lib/formatters';
 import { ArrowLeft, Plus, Trash2, Save, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { connectWallet } from '@/lib/wallet';
 
 interface MilestoneInput {
   description: string;
@@ -18,6 +19,8 @@ interface MilestoneInput {
 const CreateCampaign = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [organiser, setOrganiser] = useState<{ walletAddress: string } | null>(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -79,8 +82,31 @@ const CreateCampaign = () => {
     return null;
   };
 
+  const handleOrganiserSignIn = async () => {
+    try {
+      setSigningIn(true);
+      const { address } = await connectWallet();
+      const result = await api.signInOrganiser({ walletAddress: address });
+      const walletAddress = result.data?.organiser?.walletAddress || address;
+      setOrganiser({ walletAddress });
+      toast.success('Signed in as organiser', {
+        description: formatAddress(walletAddress)
+      });
+    } catch (error) {
+      console.error('Organiser sign-in failed:', error);
+      toast.error('Failed to sign in as organiser');
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!organiser) {
+      toast.error('Please sign in as an organiser before creating a campaign');
+      return;
+    }
 
     const error = validateForm();
     if (error) {
@@ -90,12 +116,10 @@ const CreateCampaign = () => {
 
     try {
       setLoading(true);
-
-      const demoCreator = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb';
       const deadlineTimestamp = Math.floor(new Date(formData.deadline).getTime() / 1000);
 
       const result = await api.createCampaign({
-        creator: demoCreator,
+        creator: organiser.walletAddress,
         title: formData.title,
         description: formData.description,
         goalKES: parseFloat(formData.goalKES),
@@ -141,6 +165,32 @@ const CreateCampaign = () => {
             Launch a transparent, blockchain-secured fundraising campaign
           </p>
         </div>
+
+        <Card className="p-6 mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">
+                Organiser Sign-In
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Connect your wallet to sign in as an organiser before creating a campaign.
+              </p>
+              {organiser && (
+                <p className="mt-2 text-sm text-foreground">
+                  Signed in as <span className="font-mono">{formatAddress(organiser.walletAddress)}</span>
+                </p>
+              )}
+            </div>
+            <Button
+              type="button"
+              onClick={handleOrganiserSignIn}
+              disabled={signingIn}
+              className="gap-2"
+            >
+              {signingIn ? 'Connecting...' : organiser ? 'Change Wallet' : 'Connect Wallet'}
+            </Button>
+          </div>
+        </Card>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
@@ -323,7 +373,7 @@ const CreateCampaign = () => {
           <div className="flex gap-4">
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || !organiser}
               className="flex-1 gap-2"
             >
               <Save className="h-4 w-4" />
